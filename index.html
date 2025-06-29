@@ -610,26 +610,43 @@
                 }
             };
 
+            // Effect to initialize Tone.js synths ONCE on component mount
+            useEffect(() => {
+                // Initialize Tone.js synths only once on component mount
+                synthRef.current = new Tone.Synth().toDestination();
+                longBeepSynthRef.current = new Tone.Synth().toDestination();
+
+                // Clean up synths and any lingering interval on component unmount
+                return () => {
+                    clearInterval(intervalRef.current); // Ensure any running interval is cleared
+                    if (synthRef.current) {
+                        synthRef.current.dispose();
+                        synthRef.current = null;
+                    }
+                    if (longBeepSynthRef.current) {
+                        longBeepSynthRef.current.dispose();
+                        longBeepSynthRef.current = null;
+                    }
+                    document.title = 'Calistenia App'; // Reset title when leaving the player
+                };
+            }, []); // Empty dependency array means this runs only on mount and unmount
+
+
+            // Effect to set up routine-specific data and notification permission
             useEffect(() => {
                 if (!routine || !routine.sequence || routine.sequence.length === 0) {
                     onFinish();
                     return;
                 }
 
-                if (!synthRef.current) {
-                    synthRef.current = new Tone.Synth().toDestination();
-                }
-                if (!longBeepSynthRef.current) {
-                    longBeepSynthRef.current = new Tone.Synth().toDestination();
-                }
-
+                // Reset timer states for the new routine/initial load
                 const initialTotalTime = calculateTotalDuration(routine.sequence);
                 setTotalTimeLeft(initialTotalTime);
                 setTimeLeftCurrent(routine.sequence[0]?.duration || 0);
                 setMessage('');
                 updateBrowserTitle(routine.sequence[0]?.name || 'Rutina Iniciada', routine.sequence[0]?.duration || 0);
 
-                // Request notification permission on first mount of player
+                // Request notification permission if not already granted/denied
                 if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
                     Notification.requestPermission().then(permission => {
                         if (permission === 'granted') {
@@ -640,19 +657,14 @@
                     });
                 }
 
+                // Clean up interval from previous routine start if any
+                clearInterval(intervalRef.current);
+                setIsRunning(false); // Ensure it's not running by default
 
-                return () => {
-                    clearInterval(intervalRef.current);
-                    if (synthRef.current) {
-                        synthRef.current.dispose();
-                    }
-                    if (longBeepSynthRef.current) {
-                        longBeepSynthRef.current.dispose();
-                    }
-                    document.title = 'Calistenia App';
-                };
-            }, [routine, onFinish]);
+            }, [routine, onFinish]); // Dependencies: routine, onFinish
 
+
+            // Effect for timer logic and step changes
             useEffect(() => {
                 if (isRunning && timeLeftCurrent > 0) {
                     intervalRef.current = setInterval(() => {
@@ -661,17 +673,20 @@
                         updateBrowserTitle(routine.sequence[currentStepIndex]?.name || 'Ejercicio', timeLeftCurrent - 1);
                     }, 1000);
                 } else if (isRunning && timeLeftCurrent === 0) {
+                    // Current step finished
                     playShortBeep();
                     showWebNotification('Tiempo!', `Finalizado: ${routine.sequence[currentStepIndex]?.name}`);
 
                     const nextIndex = currentStepIndex + 1;
                     if (nextIndex < routine.sequence.length) {
+                        // Move to next step
                         setCurrentStepIndex(nextIndex);
                         setTimeLeftCurrent(routine.sequence[nextIndex].duration);
                         playLongBeep();
                         showWebNotification('Siguiente!', `Comienza: ${routine.sequence[nextIndex]?.name}`);
                         updateBrowserTitle(routine.sequence[nextIndex]?.name || 'Siguiente', routine.sequence[nextIndex]?.duration);
                     } else {
+                        // Routine finished
                         setIsRunning(false);
                         clearInterval(intervalRef.current);
                         setMessage("¡Rutina Completada!");
@@ -681,11 +696,14 @@
                         setTimeout(() => onFinish(), 3000);
                     }
                 } else {
-                    clearInterval(intervalRef.current);
+                    clearInterval(intervalRef.current); // Stop interval if not running or time is 0
                 }
 
-                return () => clearInterval(intervalRef.current);
-            }, [isRunning, timeLeftCurrent, currentStepIndex, routine.sequence, onFinish]);
+                // Cleanup function for this specific effect
+                return () => {
+                    clearInterval(intervalRef.current);
+                };
+            }, [isRunning, timeLeftCurrent, currentStepIndex, routine.sequence, onFinish]); // Dependencies
 
             const playShortBeep = () => {
                 if (synthRef.current) {
@@ -701,7 +719,7 @@
 
             const startWorkout = async () => {
                 if (Tone.context.state !== 'running') {
-                    await Tone.start();
+                    await Tone.start(); // Ensure audio context is running on user gesture
                     console.log('AudioContext started');
                 }
                 setIsRunning(true);
@@ -719,11 +737,14 @@
 
             const resetWorkout = () => {
                 setIsRunning(false);
-                setCurrentStepIndex(0);
-                setTotalTimeLeft(calculateTotalDuration(routine.sequence));
+                setCurrentStepIndex(0); // Reset to first step
+                // Recalculate initial times for current routine
+                const initialTotalTime = calculateTotalDuration(routine.sequence);
+                setTotalTimeLeft(initialTotalTime);
                 setTimeLeftCurrent(routine.sequence[0]?.duration || 0);
                 setMessage('Rutina Reiniciada');
-                document.title = 'Calistenia App';
+                document.title = 'Calistenia App'; // Reset title
+                clearInterval(intervalRef.current); // Ensure interval is cleared
             };
 
             const currentStep = routine.sequence[currentStepIndex];
@@ -833,7 +854,7 @@
             root.render(React.createElement(App, null));
         }
 
-        // Service Worker Registration (¡NUEVO!)
+        // Service Worker Registration
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./service-worker.js')
