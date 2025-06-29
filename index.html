@@ -450,7 +450,7 @@
                     React.createElement(
                         'label',
                         { htmlFor: 'routineName', className: 'block text-zinc-200 text-sm font-bold mb-2' },
-                        'Nombre de la Rutina:'
+                        'Nombre del Ejercicio:'
                     ),
                     React.createElement('input', {
                         type: 'text',
@@ -616,36 +616,6 @@
                 synthRef.current = new Tone.Synth().toDestination();
                 longBeepSynthRef.current = new Tone.Synth().toDestination();
 
-                // Clean up synths and any lingering interval on component unmount
-                return () => {
-                    clearInterval(intervalRef.current); // Ensure any running interval is cleared
-                    if (synthRef.current) {
-                        synthRef.current.dispose();
-                        synthRef.current = null;
-                    }
-                    if (longBeepSynthRef.current) {
-                        longBeepSynthRef.current.dispose();
-                        longBeepSynthRef.current = null;
-                    }
-                    document.title = 'Calistenia App'; // Reset title when leaving the player
-                };
-            }, []); // Empty dependency array means this runs only on mount and unmount
-
-
-            // Effect to set up routine-specific data and notification permission
-            useEffect(() => {
-                if (!routine || !routine.sequence || routine.sequence.length === 0) {
-                    onFinish();
-                    return;
-                }
-
-                // Reset timer states for the new routine/initial load
-                const initialTotalTime = calculateTotalDuration(routine.sequence);
-                setTotalTimeLeft(initialTotalTime);
-                setTimeLeftCurrent(routine.sequence[0]?.duration || 0);
-                setMessage('');
-                updateBrowserTitle(routine.sequence[0]?.name || 'Rutina Iniciada', routine.sequence[0]?.duration || 0);
-
                 // Request notification permission if not already granted/denied
                 if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
                     Notification.requestPermission().then(permission => {
@@ -657,53 +627,78 @@
                     });
                 }
 
-                // Clean up interval from previous routine start if any
-                clearInterval(intervalRef.current);
-                setIsRunning(false); // Ensure it's not running by default
+                // Clean up synths on component unmount
+                return () => {
+                    if (synthRef.current && synthRef.current.dispose) {
+                        synthRef.current.dispose();
+                        synthRef.current = null;
+                    }
+                    if (longBeepSynthRef.current && longBeepSynthRef.current.dispose) {
+                        longBeepSynthRef.current.dispose();
+                        longBeepSynthRef.current = null;
+                    }
+                    document.title = 'Calistenia App'; // Reset title when leaving the player
+                };
+            }, []); // Empty dependency array means this runs only on mount and unmount
 
-            }, [routine, onFinish]); // Dependencies: routine, onFinish
 
-
-            // Effect for timer logic and step changes
+            // Effect to set up routine-specific data and control timer
             useEffect(() => {
-                if (isRunning && timeLeftCurrent > 0) {
-                    intervalRef.current = setInterval(() => {
-                        setTimeLeftCurrent(prev => prev - 1);
-                        setTotalTimeLeft(prev => prev - 1);
-                        updateBrowserTitle(routine.sequence[currentStepIndex]?.name || 'Ejercicio', timeLeftCurrent - 1);
-                    }, 1000);
-                } else if (isRunning && timeLeftCurrent === 0) {
-                    // Current step finished
-                    playShortBeep();
-                    showWebNotification('Tiempo!', `Finalizado: ${routine.sequence[currentStepIndex]?.name}`);
+                // Clear any existing interval when dependencies change or component re-renders
+                if (intervalRef.current) {
+                    clearInterval(intervalRef.current);
+                }
 
-                    const nextIndex = currentStepIndex + 1;
-                    if (nextIndex < routine.sequence.length) {
-                        // Move to next step
-                        setCurrentStepIndex(nextIndex);
-                        setTimeLeftCurrent(routine.sequence[nextIndex].duration);
-                        playLongBeep();
-                        showWebNotification('Siguiente!', `Comienza: ${routine.sequence[nextIndex]?.name}`);
-                        updateBrowserTitle(routine.sequence[nextIndex]?.name || 'Siguiente', routine.sequence[nextIndex]?.duration);
-                    } else {
-                        // Routine finished
-                        setIsRunning(false);
-                        clearInterval(intervalRef.current);
-                        setMessage("¡Rutina Completada!");
-                        playLongBeep(2);
-                        document.title = '¡Rutina Completada!';
-                        showWebNotification('¡Rutina Completada!', 'Excelente trabajo!');
-                        setTimeout(() => onFinish(), 3000);
+                if (!routine || !routine.sequence || routine.sequence.length === 0) {
+                    onFinish();
+                    return;
+                }
+
+                if (isRunning) {
+                    if (timeLeftCurrent > 0) {
+                        intervalRef.current = setInterval(() => {
+                            setTimeLeftCurrent(prev => prev - 1);
+                            setTotalTimeLeft(prev => prev - 1);
+                            const stepName = routine.sequence[currentStepIndex]?.name || 'Ejercicio';
+                            updateBrowserTitle(stepName, timeLeftCurrent - 1);
+                        }, 1000);
+                    } else { // timeLeftCurrent is 0, a step has completed
+                        playShortBeep();
+                        showWebNotification('Tiempo!', `Finalizado: ${routine.sequence[currentStepIndex]?.name || 'Paso'}`);
+
+                        // Add a small delay for smoother transitions
+                        setTimeout(() => {
+                            const nextIndex = currentStepIndex + 1;
+                            if (nextIndex < routine.sequence.length) {
+                                setCurrentStepIndex(nextIndex);
+                                setTimeLeftCurrent(routine.sequence[nextIndex].duration);
+                                playLongBeep();
+                                showWebNotification('Siguiente!', `Comienza: ${routine.sequence[nextIndex]?.name || 'Siguiente paso'}`);
+                                updateBrowserTitle(routine.sequence[nextIndex]?.name || 'Siguiente', routine.sequence[nextIndex]?.duration);
+                            } else {
+                                // Routine finished
+                                setIsRunning(false);
+                                setMessage("¡Rutina Completada!");
+                                playLongBeep(2);
+                                document.title = '¡Rutina Completada!';
+                                showWebNotification('¡Rutina Completada!', 'Excelente trabajo!');
+                                setTimeout(() => onFinish(), 3000); // Existing delay before going back
+                            }
+                        }, 100); // Small 100ms delay to allow UI to settle
                     }
                 } else {
-                    clearInterval(intervalRef.current); // Stop interval if not running or time is 0
+                    // If not running, ensure no interval is active
+                    clearInterval(intervalRef.current);
                 }
 
                 // Cleanup function for this specific effect
                 return () => {
-                    clearInterval(intervalRef.current);
+                    if (intervalRef.current) {
+                        clearInterval(intervalRef.current);
+                    }
                 };
-            }, [isRunning, timeLeftCurrent, currentStepIndex, routine.sequence, onFinish]); // Dependencies
+            }, [isRunning, timeLeftCurrent, currentStepIndex, routine, onFinish]); // Dependencies
+
 
             const playShortBeep = () => {
                 if (synthRef.current) {
