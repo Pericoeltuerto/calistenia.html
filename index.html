@@ -4,50 +4,39 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calistenia App</title>
-    <!-- Define el color de la barra de título del navegador para una mejor integración móvil -->
-    <meta name="theme-color" content="#18181b"> <!-- Zinc-950 -->
-    <!-- Enlace al Web App Manifest (¡Nuevo!) -->
+    <meta name="theme-color" content="#18181b">
     <link rel="manifest" href="./manifest.json">
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React, ReactDOM, Tone.js CDNs -->
-    <!-- Important: We are using production versions for better performance -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/15.1.22/Tone.min.js"></script>
-    <!-- Google Fonts (Inter) -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
             margin: 0;
-            overflow-x: hidden; /* Prevent horizontal scrolling */
+            overflow-x: hidden;
         }
-        /* Custom height to properly center the app container */
         #root {
-            min-height: calc(100vh - 32px); /* Full viewport height minus padding from body */
-            display: flex; /* Use flex to center content */
-            align-items: center; /* Center vertically */
-            justify-content: center; /* Center horizontally */
+            min-height: calc(100vh - 32px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
     </style>
 </head>
 <body class="bg-gradient-to-br from-zinc-900 to-black text-white">
     <div id="root" class="w-full max-w-lg mx-auto">
-        <!-- Message for initial loading before React mounts -->
         <div class="text-center text-xl text-indigo-400 animate-pulse">
             Cargando aplicación...
         </div>
     </div>
 
     <script type="text/javascript">
-        // Now, we write plain JavaScript using React.createElement directly, no Babel needed in browser.
         const { useState, useEffect, createContext, useContext, useRef } = React;
 
-        // Context for global states (exercises and routines)
         const AppContext = createContext(null);
 
-        // Utility function for localStorage
         const saveToLocalStorage = (key, data) => {
             try {
                 localStorage.setItem(key, JSON.stringify(data));
@@ -66,9 +55,8 @@
             }
         };
 
-        // Main App Component
         const App = () => {
-            const [currentPage, setCurrentPage] = useState('routines'); // 'routines', 'exercises', 'player'
+            const [currentPage, setCurrentPage] = useState('routines');
             const [selectedRoutine, setSelectedRoutine] = useState(null);
             const [exercises, setExercises] = useState(() => loadFromLocalStorage('calisthenics_exercises') || []);
             const [routines, setRoutines] = useState(() => loadFromLocalStorage('calisthenics_routines') || []);
@@ -131,7 +119,6 @@
             );
         };
 
-        // Exercise List Component
         const ExerciseList = () => {
             const { exercises, setExercises } = useContext(AppContext);
             const [exerciseName, setExerciseName] = useState('');
@@ -156,7 +143,7 @@
                     setMessage("Ejercicio actualizado con éxito.");
                 } else {
                     setExercises([...exercises, {
-                        id: Date.now(), // Simple unique ID
+                        id: Date.now(),
                         name: exerciseName.trim(),
                         duration: parseInt(exerciseDuration),
                         description: exerciseDescription.trim()
@@ -317,7 +304,6 @@
             );
         };
 
-        // Routine List Component
         const RoutineList = ({ onSelectRoutine, onCreateNew }) => {
             const { routines, setRoutines } = useContext(AppContext);
             const [message, setMessage] = useState('');
@@ -387,7 +373,6 @@
             );
         };
 
-        // Routine Builder Component
         const RoutineBuilder = ({ onBack }) => {
             const { exercises, routines, setRoutines } = useContext(AppContext);
             const [routineName, setRoutineName] = useState('');
@@ -599,7 +584,6 @@
             );
         };
 
-        // Workout Player Component
         const WorkoutPlayer = ({ routine, onFinish }) => {
             const [currentStepIndex, setCurrentStepIndex] = useState(0);
             const [timeLeftCurrent, setTimeLeftCurrent] = useState(0);
@@ -621,23 +605,8 @@
             };
 
             const showWebNotification = (title, body) => {
-                // Notifications are generally not supported for file:// URLs
-                // This function is kept for completeness but won't work in local file context.
-                if ('Notification' in window) {
-                    if (Notification.permission === 'granted') {
-                        new Notification(title, { body: body, icon: 'https://placehold.co/48x48/18181b/ffffff?text=APP' });
-                    } else if (Notification.permission !== 'denied') {
-                        Notification.requestPermission().then(permission => {
-                            if (permission === 'granted') {
-                                new Notification(title, { body: body, icon: 'https://placehold.co/48x48/18181b/ffffff?text=APP' });
-                            } else {
-                                console.warn("Permiso de notificaciones denegado o no concedido.");
-                                console.warn("Las notificaciones web avanzadas (PWA) requieren HTTPS. file:// no lo permite.");
-                            }
-                        });
-                    }
-                } else {
-                    console.warn("Este navegador no soporta Notificaciones Web (o las tiene deshabilitadas).");
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification(title, { body: body, icon: 'https://placehold.co/48x48/18181b/ffffff?text=APP' });
                 }
             };
 
@@ -647,16 +616,30 @@
                     return;
                 }
 
-                // Initialize Tone.js synths
-                // Tone.start() requires a user gesture for audio to play.
-                synthRef.current = new Tone.Synth().toDestination();
-                longBeepSynthRef.current = new Tone.Synth().toDestination();
+                if (!synthRef.current) {
+                    synthRef.current = new Tone.Synth().toDestination();
+                }
+                if (!longBeepSynthRef.current) {
+                    longBeepSynthRef.current = new Tone.Synth().toDestination();
+                }
 
                 const initialTotalTime = calculateTotalDuration(routine.sequence);
                 setTotalTimeLeft(initialTotalTime);
                 setTimeLeftCurrent(routine.sequence[0]?.duration || 0);
                 setMessage('');
                 updateBrowserTitle(routine.sequence[0]?.name || 'Rutina Iniciada', routine.sequence[0]?.duration || 0);
+
+                // Request notification permission on first mount of player
+                if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+                    Notification.requestPermission().then(permission => {
+                        if (permission === 'granted') {
+                            console.log("Permiso de notificaciones concedido.");
+                        } else {
+                            console.warn("Permiso de notificaciones denegado o no concedido.");
+                        }
+                    });
+                }
+
 
                 return () => {
                     clearInterval(intervalRef.current);
@@ -666,7 +649,7 @@
                     if (longBeepSynthRef.current) {
                         longBeepSynthRef.current.dispose();
                     }
-                    document.title = 'Calistenia App'; // Reset title on unmount
+                    document.title = 'Calistenia App';
                 };
             }, [routine, onFinish]);
 
@@ -678,22 +661,21 @@
                         updateBrowserTitle(routine.sequence[currentStepIndex]?.name || 'Ejercicio', timeLeftCurrent - 1);
                     }, 1000);
                 } else if (isRunning && timeLeftCurrent === 0) {
-                    playShortBeep(); // Short beep for end of exercise/rest
+                    playShortBeep();
                     showWebNotification('Tiempo!', `Finalizado: ${routine.sequence[currentStepIndex]?.name}`);
 
                     const nextIndex = currentStepIndex + 1;
                     if (nextIndex < routine.sequence.length) {
                         setCurrentStepIndex(nextIndex);
                         setTimeLeftCurrent(routine.sequence[nextIndex].duration);
-                        playLongBeep(); // Long beep for start of next step
+                        playLongBeep();
                         showWebNotification('Siguiente!', `Comienza: ${routine.sequence[nextIndex]?.name}`);
                         updateBrowserTitle(routine.sequence[nextIndex]?.name || 'Siguiente', routine.sequence[nextIndex]?.duration);
                     } else {
-                        // Routine finished
                         setIsRunning(false);
                         clearInterval(intervalRef.current);
                         setMessage("¡Rutina Completada!");
-                        playLongBeep(2); // Play a different beep for completion (e.g., higher frequency)
+                        playLongBeep(2);
                         document.title = '¡Rutina Completada!';
                         showWebNotification('¡Rutina Completada!', 'Excelente trabajo!');
                         setTimeout(() => onFinish(), 3000);
@@ -705,7 +687,6 @@
                 return () => clearInterval(intervalRef.current);
             }, [isRunning, timeLeftCurrent, currentStepIndex, routine.sequence, onFinish]);
 
-            // Audio functions
             const playShortBeep = () => {
                 if (synthRef.current) {
                     synthRef.current.triggerAttackRelease("C4", "8n");
@@ -719,7 +700,6 @@
             };
 
             const startWorkout = async () => {
-                // Ensure audio context is running on user gesture
                 if (Tone.context.state !== 'running') {
                     await Tone.start();
                     console.log('AudioContext started');
@@ -801,8 +781,8 @@
                         React.createElement(
                             'svg',
                             { xmlns: 'http://www.w3.org/2000/svg', className: 'h-7 w-7 mr-3', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' },
-                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.262a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z' }),
-                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z' })
+                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: "M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.262a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" }),
+                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: "M21 12a9 9 0 11-18 0 9 9 0 0118 0z" })
                         ),
                         'Iniciar'
                     ) : React.createElement(
@@ -814,7 +794,7 @@
                         React.createElement(
                             'svg',
                             { xmlns: 'http://www.w3.org/2000/svg', className: 'h-7 w-7 mr-3', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' },
-                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M10 17l-3-3m0 0l3-3m-3 3h10m6 0a9 9 0 11-18 0 9 9 0 0118 0z' })
+                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: "M10 17l-3-3m0 0l3-3m-3 3h10m6 0a9 9 0 11-18 0 9 9 0 0118 0z" })
                         ),
                         'Pausar'
                     )
@@ -831,7 +811,7 @@
                         React.createElement(
                             'svg',
                             { xmlns: 'http://www.w3.org/2000/svg', className: 'h-6 w-6 mr-2', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' },
-                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M4 4v5h.582m15.356-2A8.001 8.001 0 004 13v1a8 8 0 0015.356 2m-6.356-2H20v-5' })
+                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: "M4 4v5h.582m15.356-2A8.001 8.001 0 004 13v1a8 8 0 0015.356 2m-6.356-2H20v-5" })
                         ),
                         'Reiniciar'
                     ),
@@ -847,11 +827,23 @@
             );
         };
 
-        // Render the App component into the 'root' div using createRoot
         const rootElement = document.getElementById('root');
         if (rootElement) {
             const root = ReactDOM.createRoot(rootElement);
             root.render(React.createElement(App, null));
+        }
+
+        // Service Worker Registration (¡NUEVO!)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker registrado con éxito:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.error('Fallo el registro del Service Worker:', error);
+                    });
+            });
         }
     </script>
 </body>
