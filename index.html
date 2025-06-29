@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calistenia App</title>
+    <!-- Define el color de la barra de título del navegador para una mejor integración móvil -->
+    <meta name="theme-color" content="#18181b"> <!-- Zinc-950 -->
+    <!-- Enlace al Web App Manifest (¡Nuevo!) -->
+    <link rel="manifest" href="./manifest.json">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React, ReactDOM, Tone.js CDNs -->
+    <!-- Important: We are using production versions for better performance -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/15.1.22/Tone.min.js"></script>
+    <!-- Google Fonts (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow-x: hidden; /* Prevent horizontal scrolling */
+        }
+        /* Custom height to properly center the app container */
+        #root {
+            min-height: calc(100vh - 32px); /* Full viewport height minus padding from body */
+            display: flex; /* Use flex to center content */
+            align-items: center; /* Center vertically */
+            justify-content: center; /* Center horizontally */
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-zinc-900 to-black text-white">
+    <div id="root" class="w-full max-w-lg mx-auto">
+        <!-- Message for initial loading before React mounts -->
+        <div class="text-center text-xl text-indigo-400 animate-pulse">
+            Cargando aplicación...
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        // Now, we write plain JavaScript using React.createElement directly, no Babel needed in browser.
+        const { useState, useEffect, createContext, useContext, useRef } = React;
+
+        // Context for global states (exercises and routines)
+        const AppContext = createContext(null);
+
+        // Utility function for localStorage
+        const saveToLocalStorage = (key, data) => {
+            try {
+                localStorage.setItem(key, JSON.stringify(data));
+            } catch (error) {
+                console.error("Error al guardar en localStorage:", error);
+            }
+        };
+
+        const loadFromLocalStorage = (key) => {
+            try {
+                const data = localStorage.getItem(key);
+                return data ? JSON.parse(data) : null;
+            } catch (error) {
+                console.error("Error al cargar de localStorage:", error);
+                return null;
+            }
+        };
+
+        // Main App Component
+        const App = () => {
+            const [currentPage, setCurrentPage] = useState('routines'); // 'routines', 'exercises', 'player'
+            const [selectedRoutine, setSelectedRoutine] = useState(null);
+            const [exercises, setExercises] = useState(() => loadFromLocalStorage('calisthenics_exercises') || []);
+            const [routines, setRoutines] = useState(() => loadFromLocalStorage('calisthenics_routines') || []);
+
+            useEffect(() => {
+                saveToLocalStorage('calisthenics_exercises', exercises);
+            }, [exercises]);
+
+            useEffect(() => {
+                saveToLocalStorage('calisthenics_routines', routines);
+            }, [routines]);
+
+            const handleStartRoutine = (routine) => {
+                setSelectedRoutine(routine);
+                setCurrentPage('player');
+            };
+
+            return React.createElement(
+                AppContext.Provider,
+                { value: { exercises, setExercises, routines, setRoutines } },
+                React.createElement(
+                    'div',
+                    { className: 'w-full bg-zinc-950 rounded-xl shadow-2xl border border-zinc-700/50 p-6 flex flex-col items-center mx-auto' },
+                    React.createElement(
+                        'h1',
+                        { className: 'text-5xl font-extrabold mb-8 text-indigo-400 drop-shadow-lg tracking-wide text-center' },
+                        'CALISTENIA APP'
+                    ),
+                    React.createElement(
+                        'nav',
+                        { className: 'w-full max-w-md flex justify-around bg-zinc-800 p-3 rounded-xl shadow-2xl mb-8 border border-zinc-700/50' },
+                        React.createElement(
+                            'button',
+                            {
+                                onClick: () => setCurrentPage('routines'),
+                                className: `flex-1 mx-1 px-4 py-3 rounded-lg font-semibold text-lg transition-all duration-300 transform hover:scale-105 shadow-md
+                                  ${currentPage === 'routines' ? 'bg-indigo-600 text-white shadow-indigo-500/50' : 'bg-zinc-700 text-zinc-300 hover:bg-indigo-500 hover:text-white'}`
+                            },
+                            'Rutinas'
+                        ),
+                        React.createElement(
+                            'button',
+                            {
+                                onClick: () => setCurrentPage('exercises'),
+                                className: `flex-1 mx-1 px-4 py-3 rounded-lg font-semibold text-lg transition-all duration-300 transform hover:scale-105 shadow-md
+                                  ${currentPage === 'exercises' ? 'bg-indigo-600 text-white shadow-indigo-500/50' : 'bg-zinc-700 text-zinc-300 hover:bg-indigo-500 hover:text-white'}`
+                            },
+                            'Ejercicios'
+                        )
+                    ),
+                    React.createElement(
+                        'div',
+                        { className: 'w-full max-w-lg bg-zinc-800 p-6 rounded-xl shadow-2xl border border-zinc-700/50 flex-grow' },
+                        currentPage === 'routines' && React.createElement(RoutineList, { onSelectRoutine: handleStartRoutine, onCreateNew: () => setCurrentPage('routine-builder') }),
+                        currentPage === 'routine-builder' && React.createElement(RoutineBuilder, { onBack: () => setCurrentPage('routines') }),
+                        currentPage === 'exercises' && React.createElement(ExerciseList, null),
+                        currentPage === 'player' && selectedRoutine && React.createElement(WorkoutPlayer, { routine: selectedRoutine, onFinish: () => setCurrentPage('routines') })
+                    )
+                )
+            );
+        };
+
+        // Exercise List Component
+        const ExerciseList = () => {
+            const { exercises, setExercises } = useContext(AppContext);
+            const [exerciseName, setExerciseName] = useState('');
+            const [exerciseDuration, setExerciseDuration] = useState('');
+            const [exerciseDescription, setExerciseDescription] = useState('');
+            const [editingId, setEditingId] = useState(null);
+            const [message, setMessage] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!exerciseName.trim() || !exerciseDuration || isNaN(exerciseDuration) || parseInt(exerciseDuration) <= 0) {
+                    setMessage("Por favor, introduce un nombre y una duración válida (en segundos) para el ejercicio.");
+                    return;
+                }
+
+                if (editingId) {
+                    setExercises(exercises.map(ex =>
+                        ex.id === editingId
+                            ? { ...ex, name: exerciseName.trim(), duration: parseInt(exerciseDuration), description: exerciseDescription.trim() }
+                            : ex
+                    ));
+                    setMessage("Ejercicio actualizado con éxito.");
+                } else {
+                    setExercises([...exercises, {
+                        id: Date.now(), // Simple unique ID
+                        name: exerciseName.trim(),
+                        duration: parseInt(exerciseDuration),
+                        description: exerciseDescription.trim()
+                    }]);
+                    setMessage("Ejercicio añadido con éxito.");
+                }
+                setExerciseName('');
+                setExerciseDuration('');
+                setExerciseDescription('');
+                setEditingId(null);
+            };
+
+            const handleEdit = (exercise) => {
+                setEditingId(exercise.id);
+                setExerciseName(exercise.name);
+                setExerciseDuration(exercise.duration);
+                setExerciseDescription(exercise.description || '');
+            };
+
+            const handleDelete = (id) => {
+                setExercises(exercises.filter(ex => ex.id !== id));
+                setMessage("Ejercicio eliminado con éxito.");
+            };
+
+            return React.createElement(
+                'div',
+                { className: 'p-4 bg-zinc-800 rounded-lg shadow-inner border border-zinc-700/50' },
+                React.createElement(
+                    'h2',
+                    { className: 'text-3xl font-semibold mb-6 text-indigo-300' },
+                    'Mis Ejercicios'
+                ),
+                message && React.createElement('p', { className: 'text-center mb-4 text-green-400 font-medium' }, message),
+                React.createElement(
+                    'form',
+                    { onSubmit: handleSubmit, className: 'mb-8 p-6 bg-zinc-700 rounded-lg shadow-xl border border-zinc-600/50' },
+                    React.createElement(
+                        'div',
+                        { className: 'mb-4' },
+                        React.createElement(
+                            'label',
+                            { htmlFor: 'exerciseName', className: 'block text-zinc-200 text-sm font-bold mb-2' },
+                            'Nombre del Ejercicio:'
+                        ),
+                        React.createElement('input', {
+                            type: 'text',
+                            id: 'exerciseName',
+                            className: 'shadow-inner appearance-none border border-zinc-500 rounded-lg w-full py-2 px-3 text-zinc-900 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-zinc-300',
+                            value: exerciseName,
+                            onChange: (e) => setExerciseName(e.target.value),
+                            required: true
+                        })
+                    ),
+                    React.createElement(
+                        'div',
+                        { className: 'mb-4' },
+                        React.createElement(
+                            'label',
+                            { htmlFor: 'exerciseDescription', className: 'block text-zinc-200 text-sm font-bold mb-2' },
+                            'Descripción y Consejos:'
+                        ),
+                        React.createElement('textarea', {
+                            id: 'exerciseDescription',
+                            className: 'shadow-inner appearance-none border border-zinc-500 rounded-lg w-full py-2 px-3 text-zinc-900 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-zinc-300 h-24',
+                            value: exerciseDescription,
+                            onChange: (e) => setExerciseDescription(e.target.value),
+                            placeholder: 'Añade una descripción o consejos para el ejercicio.'
+                        }),
+                        React.createElement(
+                            'p',
+                            { className: 'text-sm text-zinc-400 mt-2' },
+                            '*Nota: La generación automática de descripciones con IA no está disponible en esta versión local del archivo HTML.'
+                        )
+                    ),
+                    React.createElement(
+                        'div',
+                        { className: 'mb-6' },
+                        React.createElement(
+                            'label',
+                            { htmlFor: 'exerciseDuration', className: 'block text-zinc-200 text-sm font-bold mb-2' },
+                            'Duración (segundos):'
+                        ),
+                        React.createElement('input', {
+                            type: 'number',
+                            id: 'exerciseDuration',
+                            className: 'shadow-inner appearance-none border border-zinc-500 rounded-lg w-full py-2 px-3 text-zinc-900 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-zinc-300',
+                            value: exerciseDuration,
+                            onChange: (e) => setExerciseDuration(e.target.value),
+                            min: '1',
+                            required: true
+                        })
+                    ),
+                    React.createElement(
+                        'button',
+                        {
+                            type: 'submit',
+                            className: 'w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300 transform hover:scale-105 shadow-lg'
+                        },
+                        editingId ? 'Actualizar Ejercicio' : 'Añadir Ejercicio'
+                    ),
+                    editingId && React.createElement(
+                        'button',
+                        {
+                            type: 'button',
+                            onClick: () => {
+                                setEditingId(null);
+                                setExerciseName('');
+                                setExerciseDuration('');
+                                setExerciseDescription('');
+                                setMessage('');
+                            },
+                            className: 'w-full mt-3 bg-zinc-600 hover:bg-zinc-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300 transform hover:scale-105 shadow-md'
+                        },
+                        'Cancelar Edición'
+                    )
+                ),
+                exercises.length === 0 ? React.createElement(
+                    'p',
+                    { className: 'text-center text-zinc-400' },
+                    'No hay ejercicios. ¡Añade algunos!'
+                ) : React.createElement(
+                    'ul',
+                    { className: 'space-y-4' },
+                    exercises.map((exercise) =>
+                        React.createElement(
+                            'li',
+                            { key: exercise.id, className: 'flex flex-col md:flex-row items-center justify-between bg-zinc-700 p-4 rounded-lg shadow-md border border-zinc-600/50' },
+                            React.createElement(
+                                'div',
+                                { className: 'flex-grow text-center md:text-left mb-2 md:mb-0' },
+                                React.createElement('p', { className: 'text-lg font-semibold text-white' }, exercise.name),
+                                React.createElement('p', { className: 'text-sm text-zinc-300' }, `${exercise.duration} segundos`),
+                                exercise.description && React.createElement('p', { className: 'text-xs text-zinc-400 mt-1 italic' }, exercise.description)
+                            ),
+                            React.createElement(
+                                'div',
+                                { className: 'flex space-x-2 mt-2 md:mt-0' },
+                                React.createElement(
+                                    'button',
+                                    {
+                                        onClick: () => handleEdit(exercise),
+                                        className: 'bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm transition duration-300 transform hover:scale-105 shadow-sm'
+                                    },
+                                    'Editar'
+                                ),
+                                React.createElement(
+                                    'button',
+                                    {
+                                        onClick: () => handleDelete(exercise.id),
+                                        className: 'bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm transition duration-300 transform hover:scale-105 shadow-sm'
+                                    },
+                                    'Eliminar'
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        };
+
+        // Routine List Component
+        const RoutineList = ({ onSelectRoutine, onCreateNew }) => {
+            const { routines, setRoutines } = useContext(AppContext);
+            const [message, setMessage] = useState('');
+
+            const handleDeleteRoutine = (id) => {
+                setRoutines(routines.filter(routine => routine.id !== id));
+                setMessage("Rutina eliminada con éxito.");
+            };
+
+            return React.createElement(
+                'div',
+                { className: 'p-4 bg-zinc-800 rounded-lg shadow-inner border border-zinc-700/50' },
+                React.createElement(
+                    'h2',
+                    { className: 'text-3xl font-semibold mb-6 text-indigo-300' },
+                    'Mis Rutinas'
+                ),
+                message && React.createElement('p', { className: 'text-center mb-4 text-green-400 font-medium' }, message),
+                React.createElement(
+                    'button',
+                    {
+                        onClick: onCreateNew,
+                        className: 'w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300 transform hover:scale-105 shadow-lg mb-6'
+                    },
+                    'Crear Nueva Rutina'
+                ),
+                routines.length === 0 ? React.createElement(
+                    'p',
+                    { className: 'text-center text-zinc-400' },
+                    'No hay rutinas. ¡Crea una nueva!'
+                ) : React.createElement(
+                    'ul',
+                    { className: 'space-y-4' },
+                    routines.map((routine) =>
+                        React.createElement(
+                            'li',
+                            { key: routine.id, className: 'flex flex-col md:flex-row items-center justify-between bg-zinc-700 p-4 rounded-lg shadow-md border border-zinc-600/50' },
+                            React.createElement(
+                                'div',
+                                { className: 'flex-grow text-center md:text-left mb-2 md:mb-0' },
+                                React.createElement('p', { className: 'text-xl font-semibold text-white' }, routine.name),
+                                React.createElement('p', { className: 'text-sm text-zinc-300' }, `${routine.sequence ? routine.sequence.length : 0} elementos`)
+                            ),
+                            React.createElement(
+                                'div',
+                                { className: 'flex space-x-2 mt-2 md:mt-0' },
+                                React.createElement(
+                                    'button',
+                                    {
+                                        onClick: () => onSelectRoutine(routine),
+                                        className: 'bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm transition duration-300 transform hover:scale-105 shadow-sm'
+                                    },
+                                    'Iniciar'
+                                ),
+                                React.createElement(
+                                    'button',
+                                    {
+                                        onClick: () => handleDeleteRoutine(routine.id),
+                                        className: 'bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm transition duration-300 transform hover:scale-105 shadow-sm'
+                                    },
+                                    'Eliminar'
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        };
+
+        // Routine Builder Component
+        const RoutineBuilder = ({ onBack }) => {
+            const { exercises, routines, setRoutines } = useContext(AppContext);
+            const [routineName, setRoutineName] = useState('');
+            const [selectedExerciseId, setSelectedExerciseId] = useState(exercises.length > 0 ? exercises[0].id : '');
+            const [restDuration, setRestDuration] = useState(30);
+            const [routineSequence, setRoutineSequence] = useState([]);
+            const [message, setMessage] = useState('');
+
+            useEffect(() => {
+                if (exercises.length > 0 && (!selectedExerciseId || !exercises.some(ex => ex.id === selectedExerciseId))) {
+                    setSelectedExerciseId(exercises[0].id);
+                } else if (exercises.length === 0) {
+                    setSelectedExerciseId('');
+                }
+            }, [exercises, selectedExerciseId]);
+
+            const addExerciseToSequence = () => {
+                const exercise = exercises.find(ex => ex.id === selectedExerciseId);
+                if (exercise) {
+                    setRoutineSequence([...routineSequence, { type: 'exercise', id: exercise.id, name: exercise.name, duration: exercise.duration }]);
+                    setMessage('Ejercicio añadido a la secuencia.');
+                } else {
+                    setMessage('Por favor, selecciona un ejercicio válido.');
+                }
+            };
+
+            const addRestToSequence = () => {
+                if (restDuration <= 0 || isNaN(restDuration)) {
+                    setMessage('Por favor, introduce una duración de descanso válida.');
+                    return;
+                }
+                setRoutineSequence([...routineSequence, { type: 'rest', name: 'Descanso', duration: parseInt(restDuration) }]);
+                setMessage('Descanso añadido a la secuencia.');
+            };
+
+            const removeSequenceItem = (index) => {
+                const newSequence = routineSequence.filter((_, i) => i !== index);
+                setRoutineSequence(newSequence);
+                setMessage('Elemento eliminado de la secuencia.');
+            };
+
+            const saveRoutine = () => {
+                if (!routineName.trim()) {
+                    setMessage('Por favor, introduce un nombre para la rutina.');
+                    return;
+                }
+                if (routineSequence.length === 0) {
+                    setMessage('La rutina no puede estar vacía. Añade ejercicios o descansos.');
+                    return;
+                }
+
+                setRoutines([...routines, {
+                    id: Date.now(),
+                    name: routineName.trim(),
+                    sequence: routineSequence,
+                    createdAt: new Date().toISOString()
+                }]);
+                setMessage("Rutina guardada con éxito.");
+                setRoutineName('');
+                setRoutineSequence([]);
+            };
+
+            return React.createElement(
+                'div',
+                { className: 'p-4 bg-zinc-800 rounded-lg shadow-inner border border-zinc-700/50' },
+                React.createElement(
+                    'h2',
+                    { className: 'text-3xl font-semibold mb-6 text-indigo-300' },
+                    'Crear Rutina'
+                ),
+                message && React.createElement('p', { className: 'text-center mb-4 text-green-400 font-medium' }, message),
+                React.createElement(
+                    'div',
+                    { className: 'mb-4' },
+                    React.createElement(
+                        'label',
+                        { htmlFor: 'routineName', className: 'block text-zinc-200 text-sm font-bold mb-2' },
+                        'Nombre de la Rutina:'
+                    ),
+                    React.createElement('input', {
+                        type: 'text',
+                        id: 'routineName',
+                        className: 'shadow-inner appearance-none border border-zinc-500 rounded-lg w-full py-2 px-3 text-zinc-900 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-zinc-300',
+                        value: routineName,
+                        onChange: (e) => setRoutineName(e.target.value),
+                        required: true
+                    })
+                ),
+                React.createElement(
+                    'div',
+                    { className: 'mb-8 p-6 bg-zinc-700 rounded-lg shadow-xl border border-zinc-600/50' },
+                    React.createElement(
+                        'h3',
+                        { className: 'text-xl font-semibold mb-4 text-zinc-200' },
+                        'Añadir a la Secuencia'
+                    ),
+                    React.createElement(
+                        'div',
+                        { className: 'mb-4' },
+                        React.createElement(
+                            'label',
+                            { htmlFor: 'selectExercise', className: 'block text-zinc-200 text-sm font-bold mb-2' },
+                            'Seleccionar Ejercicio:'
+                        ),
+                        React.createElement(
+                            'select',
+                            {
+                                id: 'selectExercise',
+                                className: 'shadow-inner appearance-none border border-zinc-500 rounded-lg w-full py-2 px-3 text-zinc-900 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-zinc-300',
+                                value: selectedExerciseId,
+                                onChange: (e) => setSelectedExerciseId(e.target.value)
+                            },
+                            exercises.length === 0 && React.createElement('option', { value: '' }, 'No hay ejercicios disponibles'),
+                            exercises.map(ex => React.createElement('option', { key: ex.id, value: ex.id }, `${ex.name} (${ex.duration}s)`))
+                        ),
+                        React.createElement(
+                            'button',
+                            {
+                                onClick: addExerciseToSequence,
+                                disabled: !selectedExerciseId && exercises.length === 0,
+                                className: 'w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed'
+                            },
+                            'Añadir Ejercicio'
+                        )
+                    ),
+                    React.createElement(
+                        'div',
+                        null,
+                        React.createElement(
+                            'label',
+                            { htmlFor: 'restDuration', className: 'block text-zinc-200 text-sm font-bold mb-2' },
+                            'Duración del Descanso (segundos):'
+                        ),
+                        React.createElement('input', {
+                            type: 'number',
+                            id: 'restDuration',
+                            className: 'shadow-inner appearance-none border border-zinc-500 rounded-lg w-full py-2 px-3 text-zinc-900 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-zinc-300',
+                            value: restDuration,
+                            onChange: (e) => setRestDuration(e.target.value),
+                            min: '1'
+                        }),
+                        React.createElement(
+                            'button',
+                            {
+                                onClick: addRestToSequence,
+                                className: 'w-full mt-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg'
+                            },
+                            'Añadir Descanso'
+                        )
+                    )
+                ),
+                React.createElement(
+                    'h3',
+                    { className: 'text-xl font-semibold mb-4 text-zinc-200' },
+                    'Secuencia de la Rutina:'
+                ),
+                routineSequence.length === 0 ? React.createElement(
+                    'p',
+                    { className: 'text-center text-zinc-400 mb-6' },
+                    'La secuencia está vacía.'
+                ) : React.createElement(
+                    'ul',
+                    { className: 'space-y-3 mb-6' },
+                    routineSequence.map((item, index) =>
+                        React.createElement(
+                            'li',
+                            { key: index, className: 'flex items-center justify-between bg-zinc-700 p-4 rounded-lg shadow-md border border-zinc-600/50' },
+                            React.createElement(
+                                'div',
+                                null,
+                                React.createElement(
+                                    'p',
+                                    { className: 'text-lg font-semibold text-white' },
+                                    item.type === 'exercise' ? item.name : 'Descanso'
+                                ),
+                                React.createElement('p', { className: 'text-sm text-zinc-300' }, `${item.duration} segundos`)
+                            ),
+                            React.createElement(
+                                'button',
+                                {
+                                    onClick: () => removeSequenceItem(index),
+                                    className: 'bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm transition duration-300 transform hover:scale-105 shadow-sm'
+                                },
+                                'Eliminar'
+                            )
+                        )
+                    )
+                ),
+                React.createElement(
+                    'div',
+                    { className: 'flex flex-col sm:flex-row justify-between space-y-3 sm:space-y-0 sm:space-x-4 w-full' },
+                    React.createElement(
+                        'button',
+                        {
+                            onClick: saveRoutine,
+                            className: 'flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300 transform hover:scale-105 shadow-lg'
+                        },
+                        'Guardar Rutina'
+                    ),
+                    React.createElement(
+                        'button',
+                        {
+                            onClick: onBack,
+                            className: 'flex-1 bg-zinc-600 hover:bg-zinc-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300 transform hover:scale-105 shadow-md'
+                        },
+                        'Volver a Rutinas'
+                    )
+                )
+            );
+        };
+
+        // Workout Player Component
+        const WorkoutPlayer = ({ routine, onFinish }) => {
+            const [currentStepIndex, setCurrentStepIndex] = useState(0);
+            const [timeLeftCurrent, setTimeLeftCurrent] = useState(0);
+            const [totalTimeLeft, setTotalTimeLeft] = useState(0);
+            const [isRunning, setIsRunning] = useState(false);
+            const [message, setMessage] = useState('');
+            const intervalRef = useRef(null);
+            const synthRef = useRef(null);
+            const longBeepSynthRef = useRef(null);
+
+            const calculateTotalDuration = (sequence) => {
+                return sequence.reduce((sum, item) => item.duration + sum, 0);
+            };
+
+            const updateBrowserTitle = (currentExerciseName, timeRemaining) => {
+                const minutes = Math.floor(timeRemaining / 60);
+                const seconds = timeRemaining % 60;
+                document.title = `Calistenia: ${currentExerciseName} (${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')})`;
+            };
+
+            const showWebNotification = (title, body) => {
+                // Notifications are generally not supported for file:// URLs
+                // This function is kept for completeness but won't work in local file context.
+                if ('Notification' in window) {
+                    if (Notification.permission === 'granted') {
+                        new Notification(title, { body: body, icon: 'https://placehold.co/48x48/18181b/ffffff?text=APP' });
+                    } else if (Notification.permission !== 'denied') {
+                        Notification.requestPermission().then(permission => {
+                            if (permission === 'granted') {
+                                new Notification(title, { body: body, icon: 'https://placehold.co/48x48/18181b/ffffff?text=APP' });
+                            } else {
+                                console.warn("Permiso de notificaciones denegado o no concedido.");
+                                console.warn("Las notificaciones web avanzadas (PWA) requieren HTTPS. file:// no lo permite.");
+                            }
+                        });
+                    }
+                } else {
+                    console.warn("Este navegador no soporta Notificaciones Web (o las tiene deshabilitadas).");
+                }
+            };
+
+            useEffect(() => {
+                if (!routine || !routine.sequence || routine.sequence.length === 0) {
+                    onFinish();
+                    return;
+                }
+
+                // Initialize Tone.js synths
+                // Tone.start() requires a user gesture for audio to play.
+                synthRef.current = new Tone.Synth().toDestination();
+                longBeepSynthRef.current = new Tone.Synth().toDestination();
+
+                const initialTotalTime = calculateTotalDuration(routine.sequence);
+                setTotalTimeLeft(initialTotalTime);
+                setTimeLeftCurrent(routine.sequence[0]?.duration || 0);
+                setMessage('');
+                updateBrowserTitle(routine.sequence[0]?.name || 'Rutina Iniciada', routine.sequence[0]?.duration || 0);
+
+                return () => {
+                    clearInterval(intervalRef.current);
+                    if (synthRef.current) {
+                        synthRef.current.dispose();
+                    }
+                    if (longBeepSynthRef.current) {
+                        longBeepSynthRef.current.dispose();
+                    }
+                    document.title = 'Calistenia App'; // Reset title on unmount
+                };
+            }, [routine, onFinish]);
+
+            useEffect(() => {
+                if (isRunning && timeLeftCurrent > 0) {
+                    intervalRef.current = setInterval(() => {
+                        setTimeLeftCurrent(prev => prev - 1);
+                        setTotalTimeLeft(prev => prev - 1);
+                        updateBrowserTitle(routine.sequence[currentStepIndex]?.name || 'Ejercicio', timeLeftCurrent - 1);
+                    }, 1000);
+                } else if (isRunning && timeLeftCurrent === 0) {
+                    playShortBeep(); // Short beep for end of exercise/rest
+                    showWebNotification('Tiempo!', `Finalizado: ${routine.sequence[currentStepIndex]?.name}`);
+
+                    const nextIndex = currentStepIndex + 1;
+                    if (nextIndex < routine.sequence.length) {
+                        setCurrentStepIndex(nextIndex);
+                        setTimeLeftCurrent(routine.sequence[nextIndex].duration);
+                        playLongBeep(); // Long beep for start of next step
+                        showWebNotification('Siguiente!', `Comienza: ${routine.sequence[nextIndex]?.name}`);
+                        updateBrowserTitle(routine.sequence[nextIndex]?.name || 'Siguiente', routine.sequence[nextIndex]?.duration);
+                    } else {
+                        // Routine finished
+                        setIsRunning(false);
+                        clearInterval(intervalRef.current);
+                        setMessage("¡Rutina Completada!");
+                        playLongBeep(2); // Play a different beep for completion (e.g., higher frequency)
+                        document.title = '¡Rutina Completada!';
+                        showWebNotification('¡Rutina Completada!', 'Excelente trabajo!');
+                        setTimeout(() => onFinish(), 3000);
+                    }
+                } else {
+                    clearInterval(intervalRef.current);
+                }
+
+                return () => clearInterval(intervalRef.current);
+            }, [isRunning, timeLeftCurrent, currentStepIndex, routine.sequence, onFinish]);
+
+            // Audio functions
+            const playShortBeep = () => {
+                if (synthRef.current) {
+                    synthRef.current.triggerAttackRelease("C4", "8n");
+                }
+            };
+
+            const playLongBeep = (octave = 1) => {
+                if (longBeepSynthRef.current) {
+                    longBeepSynthRef.current.triggerAttackRelease(`E${3 + octave}`, "4n");
+                }
+            };
+
+            const startWorkout = async () => {
+                // Ensure audio context is running on user gesture
+                if (Tone.context.state !== 'running') {
+                    await Tone.start();
+                    console.log('AudioContext started');
+                }
+                setIsRunning(true);
+                setMessage('');
+                playLongBeep();
+                updateBrowserTitle(routine.sequence[currentStepIndex]?.name || 'Iniciando', timeLeftCurrent);
+                showWebNotification('Rutina Iniciada', `Comienza: ${routine.name}`);
+            };
+
+            const pauseWorkout = () => {
+                setIsRunning(false);
+                setMessage('Rutina Pausada');
+                document.title = `PAUSADO: ${routine.sequence[currentStepIndex]?.name}`;
+            };
+
+            const resetWorkout = () => {
+                setIsRunning(false);
+                setCurrentStepIndex(0);
+                setTotalTimeLeft(calculateTotalDuration(routine.sequence));
+                setTimeLeftCurrent(routine.sequence[0]?.duration || 0);
+                setMessage('Rutina Reiniciada');
+                document.title = 'Calistenia App';
+            };
+
+            const currentStep = routine.sequence[currentStepIndex];
+
+            if (!routine || !currentStep) {
+                return React.createElement(
+                    'div',
+                    { className: 'text-center text-zinc-400' },
+                    'Cargando rutina o rutina no válida.',
+                    React.createElement(
+                        'button',
+                        {
+                            onClick: onFinish,
+                            className: 'mt-4 bg-zinc-600 hover:bg-zinc-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105 shadow-md'
+                        },
+                        'Volver'
+                    )
+                );
+            }
+
+            return React.createElement(
+                'div',
+                { className: 'p-6 bg-zinc-800 rounded-lg shadow-xl flex flex-col items-center justify-center min-h-[400px] border border-zinc-700/50' },
+                React.createElement('h2', { className: 'text-3xl font-bold mb-4 text-indigo-300 text-center' }, routine.name),
+                message && React.createElement('p', { className: 'text-center mb-6 text-green-400 text-xl font-semibold animate-pulse' }, message),
+                React.createElement(
+                    'div',
+                    { className: 'text-center mb-8' },
+                    React.createElement(
+                        'p',
+                        { className: 'text-5xl font-extrabold text-white mb-2 tracking-wide' },
+                        currentStep.type === 'exercise' ? currentStep.name : 'Descanso'
+                    ),
+                    React.createElement(
+                        'p',
+                        { className: 'text-7xl font-extrabold text-indigo-400 mb-4 drop-shadow-lg' },
+                        `${Math.floor(timeLeftCurrent / 60).toString().padStart(2, '0')}:${(timeLeftCurrent % 60).toString().padStart(2, '0')}`
+                    ),
+                    React.createElement(
+                        'p',
+                        { className: 'text-xl text-zinc-300 font-medium' },
+                        `Tiempo restante total: ${Math.floor(totalTimeLeft / 60).toString().padStart(2, '0')}:${(totalTimeLeft % 60).toString().padStart(2, '0')}`
+                    ),
+                    React.createElement('p', { className: 'text-base text-zinc-400' }, `Paso ${currentStepIndex + 1} de ${routine.sequence.length}`)
+                ),
+                React.createElement(
+                    'div',
+                    { className: 'flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mb-6 w-full max-w-sm' },
+                    !isRunning ? React.createElement(
+                        'button',
+                        {
+                            onClick: startWorkout,
+                            className: 'flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center text-lg'
+                        },
+                        React.createElement(
+                            'svg',
+                            { xmlns: 'http://www.w3.org/2000/svg', className: 'h-7 w-7 mr-3', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' },
+                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.262a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z' }),
+                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z' })
+                        ),
+                        'Iniciar'
+                    ) : React.createElement(
+                        'button',
+                        {
+                            onClick: pauseWorkout,
+                            className: 'flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center text-lg'
+                        },
+                        React.createElement(
+                            'svg',
+                            { xmlns: 'http://www.w3.org/2000/svg', className: 'h-7 w-7 mr-3', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' },
+                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M10 17l-3-3m0 0l3-3m-3 3h10m6 0a9 9 0 11-18 0 9 9 0 0118 0z' })
+                        ),
+                        'Pausar'
+                    )
+                ),
+                React.createElement(
+                    'div',
+                    { className: 'flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 w-full max-w-sm' },
+                    React.createElement(
+                        'button',
+                        {
+                            onClick: resetWorkout,
+                            className: 'flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center text-base'
+                        },
+                        React.createElement(
+                            'svg',
+                            { xmlns: 'http://www.w3.org/2000/svg', className: 'h-6 w-6 mr-2', fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', strokeWidth: '2' },
+                            React.createElement('path', { strokeLinecap: 'round', strokeLinejoin: 'round', d: 'M4 4v5h.582m15.356-2A8.001 8.001 0 004 13v1a8 8 0 0015.356 2m-6.356-2H20v-5' })
+                        ),
+                        'Reiniciar'
+                    ),
+                    React.createElement(
+                        'button',
+                        {
+                            onClick: onFinish,
+                            className: 'flex-1 bg-zinc-600 hover:bg-zinc-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105 shadow-md text-base'
+                        },
+                        'Volver a Rutinas'
+                    )
+                )
+            );
+        };
+
+        // Render the App component into the 'root' div using createRoot
+        const rootElement = document.getElementById('root');
+        if (rootElement) {
+            const root = ReactDOM.createRoot(rootElement);
+            root.render(React.createElement(App, null));
+        }
+    </script>
+</body>
+</html>
